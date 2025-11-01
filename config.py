@@ -13,7 +13,9 @@ AMAZON_ASSOCIATE_ID = "semmaoffers-21"
 HIGH_TRAFFIC_CATEGORIES = {
     "Health & Personal Care": "1374667031",
     "Home & Kitchen Essentials": "976442031",
-    "Mobile Accessories": "1389401031"
+    "Fashion": "6648217031",
+    "Mobile Accessories": "1389401031",
+    "Beauty": "1374407031"
 }
 
 STANDARD_CATEGORIES = {
@@ -22,8 +24,12 @@ STANDARD_CATEGORIES = {
     "Smartwatches": "11599648031",
     "Headphones": "1388921031",
     "Luxury Beauty": "5311359031",
-    "Fashion": "6648217031",
-    "Books": "976389031"
+    "Pet Supplies": "2454181031",
+    "Gaming Accessories": "2599723031",
+    "Jewellery": "1951046031",
+    "Car & Motorbike Accessories": "4772060031",
+    "Sports & Fitness": "1984475031",
+    "Smart TVs & Accessories": "1389396031"
 }
 
 # Minimum discount percentage to consider
@@ -55,3 +61,4 @@ LOG_FILENAME = "bot.log"
 # How many products to fetch per category per run (keeps runs short)
 
 LIMIT_PER_CATEGORY = 10
+
