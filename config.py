@@ -33,7 +33,7 @@ STANDARD_CATEGORIES = {
 }
 
 # Minimum discount percentage to consider
-MINIMUM_DISCOUNT = 70
+MINIMUM_DISCOUNT = 75
 
 # User-Agents to rotate
 USER_AGENTS = [
@@ -61,4 +61,5 @@ LOG_FILENAME = "bot.log"
 # How many products to fetch per category per run (keeps runs short)
 
 LIMIT_PER_CATEGORY = 10
+
 
