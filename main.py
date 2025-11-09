@@ -107,6 +107,7 @@ def process_deals_cycle(category_name: str, categories: dict, seen_urls_in_run: 
 
         title = details.get("title")
         deal_price_str = details.get("deal_price")
+        original_price_str = details.get("original_price") # Get original price
         asin = details.get("asin")
         
         if not title:
@@ -123,20 +124,28 @@ def process_deals_cycle(category_name: str, categories: dict, seen_urls_in_run: 
             logging.info(f"Already posted (from DB): {asin} - {title}")
             continue
 
+        # =========== THIS IS THE FIXED LOGIC =================
+        # Calculate the real discount percentage
+        deal_price_num = _clean_price(deal_price_str)
+        original_price_num = _clean_price(original_price_str)
+        discount_percent = 0
+
+        if deal_price_num and original_price_num and original_price_num > deal_price_num:
+            discount_percent = round(((original_price_num - deal_price_num) / original_price_num) * 100)
+        
+        # --- THIS IS THE NEW GATE ---
+        # Enforce the MINIMUM_DISCOUNT. If it's not met, skip this product.
+        if discount_percent < config.MINIMUM_DISCOUNT:
+            logging.info(f"Skipping (Real discount {discount_percent}% < {config.MINIMUM_DISCOUNT}%): {title} - {url}")
+            continue
+        # ======================================================
+
         # ----------- 💬 ATTRACTIVE CAPTION -------------
+        # If the code reaches here, the discount is >= 75%
         aff_link = create_affiliate_link(asin)
         title_escaped = title.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-        original_price_str = details.get("original_price")
-
-        deal_price_num = _clean_price(deal_price_str)
-        original_price_num = _clean_price(original_price_str)
-
-        discount_line = ""
-        if deal_price_num and original_price_num and original_price_num > deal_price_num:
-            discount_percent = round(((original_price_num - deal_price_num) / original_price_num) * 100)
-            if discount_percent >= config.MINIMUM_DISCOUNT:
-                 discount_line = f"💚 <b>{discount_percent}% OFF</b> ✅"
+        discount_line = f"💚 <b>{discount_percent}% OFF</b> ✅"
 
         caption = f"🛍️ <b>{title_escaped}</b>\n\n"
 
@@ -144,8 +153,7 @@ def process_deals_cycle(category_name: str, categories: dict, seen_urls_in_run: 
             caption += f"<s>MRP: {original_price_str}</s>\n"
 
         caption += f"💰 <b>Deal: {deal_price_str}</b>\n"
-        if discount_line:
-            caption += discount_line + "\n"
+        caption += discount_line + "\n" # Add discount line (it's guaranteed to be valid)
 
         caption += f"\n<a href='{aff_link}'>🛒 <b>Shop Now on Amazon</b></a>\n"
         caption += "⚡ Hurry! Limited time deal.\n\n"
