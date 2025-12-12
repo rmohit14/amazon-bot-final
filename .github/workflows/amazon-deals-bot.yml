@@ -1,19 +1,14 @@
 name: Amazon Deals Bot
 
+permissions:
+  contents: write
+
 on:
   schedule:
-    # Run 3 times daily at peak hours (UTC time)
-    # Adjust these times based on your timezone
-    # Currently set for: 2:30 AM, 8:30 AM, 2:30 PM UTC
-    # (8:00 AM, 2:00 PM, 8:00 PM IST)
-    - cron: '30 2 * * *'   # Morning run (8:00 AM IST)
-    - cron: '30 8 * * *'   # Afternoon run (2:00 PM IST)
-    - cron: '30 14 * * *'  # Evening run (8:00 PM IST)
-  
-  # Allow manual trigger from GitHub Actions tab
+    - cron: '30 2 * * *'
+    - cron: '30 8 * * *'
+    - cron: '30 14 * * *'
   workflow_dispatch:
-  
-  # Optional: Run on push to main branch for testing
   push:
     branches:
       - main
@@ -28,7 +23,9 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
-    
+      with:
+        fetch-depth: 0
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -53,7 +50,6 @@ jobs:
     - name: Download previous database (if exists)
       continue-on-error: true
       run: |
-        # Download data.json from previous run
         if [ -f data.json ]; then
           cp data.json /tmp/data.db
           echo "Previous database loaded"
@@ -65,8 +61,7 @@ jobs:
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         DB_FILENAME: /tmp/data.db
-      run: |
-        python run_once.py
+      run: python run_once.py
     
     - name: Upload database artifact
       uses: actions/upload-artifact@v4
@@ -79,7 +74,6 @@ jobs:
     - name: Save database for next run
       if: always()
       run: |
-        # Copy database back to repo for persistence
         if [ -f /tmp/data.db ]; then
           cp /tmp/data.db data.json
         fi
@@ -97,4 +91,4 @@ jobs:
       uses: ad-m/github-push-action@master
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        branch: ${{ github.ref }}
+        branch: main
