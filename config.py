@@ -93,6 +93,3 @@ CATEGORY_EMOJIS = {
     "Chocolates & Confectionery": "🍫",
     "Car & Motorbike Accessories": "🚗"
 }
-
-}
-
