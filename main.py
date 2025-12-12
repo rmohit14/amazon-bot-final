@@ -130,10 +130,8 @@ def create_enhanced_caption(title: str, deal_price_str: str, original_price_str:
     caption = f"{cat_emoji} <b>{title_escaped}</b>\n\n"
     
     # Discount badge with fire emojis for high discounts
-    if discount_percent >= 80:
+    if discount_percent >= 85:
         discount_line = f"🔥🔥🔥 <b>{discount_percent}% OFF</b> 🔥🔥🔥"
-    elif discount_percent >= 75:
-        discount_line = f"🔥🔥 <b>{discount_percent}% OFF</b> 🔥🔥"
     else:
         discount_line = f"🔥 <b>{discount_percent}% OFF</b>"
     
@@ -332,3 +330,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
