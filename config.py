@@ -9,25 +9,23 @@ AMAZON_ASSOCIATE_ID = "semmaoffers-21"
 
 # --- Category Split ---
 HIGH_TRAFFIC_CATEGORIES = {
-    "Health & Personal Care": "1374667031",
-    "Home & Kitchen Essentials": "976442031",
-    "Fashion": "6648217031",
-    "Mobile Accessories": "1389401031",
-    "Beauty": "1374407031"
+    "Electronics & Gadgets": "976420031",
+    "Fashion & Apparel": "1571272031",
+    "Beauty": "1355017031",
+    "Health & Personal Care": "1350385031",
+    "Jewellery": "1951046031",
+    "Sports, Fitness & Outdoors": "1984444031"
 }
 
 STANDARD_CATEGORIES = {
-    "Electronics": "976419031",
-    "Large Appliances": "976418031",
-    "Smartwatches": "11599648031",
+    "Biscuits & Cookies": "2899877031",
+    "Snacks & Nuts (General)": "2899879031",
+    "Namkeen & Savory Snacks": "2899881031",
     "Headphones": "1388921031",
     "Luxury Beauty": "5311359031",
     "Pet Supplies": "2454181031",
-    "Gaming Accessories": "2599723031",
-    "Jewellery": "1951046031",
+    "Chocolates & Confectionery": "2899882031",
     "Car & Motorbike Accessories": "4772060031",
-    "Sports & Fitness": "1984475031",
-    "Smart TVs & Accessories": "1389396031"
 }
 
 # Minimum discount percentage to consider
@@ -50,7 +48,7 @@ POSTING_SCHEDULE = {
 }
 
 # NEW: Value-add content configuration
-VALUE_ADD_CONTENT_FREQUENCY = 5  # Post educational content every 5 deals
+VALUE_ADD_CONTENT_FREQUENCY = 10  # Post educational content every 5 deals
 TIPS_AND_TRICKS = [
     "💡 *Pro Tip:* Always combine bank cashback + coupon codes to stack extra savings!",
     "🎯 *Shopping Hack:* Use Amazon's 'Subscribe & Save' for up to 15% extra discount on regular purchases!",
@@ -77,20 +75,24 @@ LIMIT_PER_CATEGORY = 10
 
 # NEW: Emoji mappings for categories
 CATEGORY_EMOJIS = {
-    "Health & Personal Care": "💊",
-    "Home & Kitchen Essentials": "🏠",
-    "Fashion": "👗",
-    "Mobile Accessories": "📱",
+    # High Traffic Categories
+    "Electronics & Gadgets": "⚡",
+    "Fashion & Apparel": "👗",
     "Beauty": "💄",
-    "Electronics": "⚡",
-    "Large Appliances": "🔌",
-    "Smartwatches": "⌚",
+    "Health & Personal Care": "💊",
+    "Jewellery": "💎",
+    "Sports, Fitness & Outdoors": "🏋️",
+
+    # Standard Categories
+    "Biscuits & Cookies": "🍪",
+    "Snacks & Nuts (General)": "🥜",
+    "Namkeen & Savory Snacks": "🍿",
     "Headphones": "🎧",
     "Luxury Beauty": "✨",
     "Pet Supplies": "🐾",
-    "Gaming Accessories": "🎮",
-    "Jewellery": "💎",
-    "Car & Motorbike Accessories": "🚗",
-    "Sports & Fitness": "🏋️",
-    "Smart TVs & Accessories": "📺"
+    "Chocolates & Confectionery": "🍫",
+    "Car & Motorbike Accessories": "🚗"
 }
+
+}
+
