@@ -1,8 +1,6 @@
-# config.py
 import os
 
 # --- Telegram Bot Configuration ---
-# The token is now loaded securely from an environment variable
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHANNEL_ID = "@SEMMAOFFERS"
 
@@ -44,22 +42,55 @@ USER_AGENTS = [
     "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:115.0) Gecko/20100101 Firefox/115.0",
 ]
 
-# Scheduler intervals (minutes)
-HIGH_TRAFFIC_INTERVAL_MIN = 30
-STANDARD_INTERVAL_MIN = 60
+# NEW: Enhanced Scheduling Configuration
+POSTING_SCHEDULE = {
+    "morning": {"hour": 8, "minute": 0},   # 8:00 AM
+    "afternoon": {"hour": 14, "minute": 0}, # 2:00 PM
+    "evening": {"hour": 20, "minute": 0}    # 8:00 PM
+}
+
+# NEW: Value-add content configuration
+VALUE_ADD_CONTENT_FREQUENCY = 5  # Post educational content every 5 deals
+TIPS_AND_TRICKS = [
+    "💡 *Pro Tip:* Always combine bank cashback + coupon codes to stack extra savings!",
+    "🎯 *Shopping Hack:* Use Amazon's 'Subscribe & Save' for up to 15% extra discount on regular purchases!",
+    "⏰ *Sale Alert:* Amazon Great Indian Festival happens twice a year - January & October. Mark your calendar!",
+    "💳 *Money Saver:* Check if your credit card offers additional cashback on Amazon purchases!",
+    "📱 *App Exclusive:* Many deals are app-only. Download Amazon app for extra discounts!",
+    "🔔 *Never Miss a Deal:* Enable notifications for this channel to get instant deal alerts!",
+    "🎁 *Gift Card Trick:* Buy Amazon gift cards during sales and use them later for double savings!",
+    "🚚 *Free Shipping Hack:* Add items to cart worth ₹499+ to get free delivery!",
+    "⭐ *Review Power:* Products with 4+ star ratings are usually better quality deals!",
+    "🔄 *Price Tracker:* Use browser extensions like 'Keepa' to track Amazon price history!"
+]
 
 # Scraper & requests tuning
 REQUEST_TIMEOUT = 12
 MAX_REQUEST_RETRIES = 4
 
 # Database & logging
-# The database path will be read from an environment variable in the cloud,
-# defaulting to 'deals.db' when run locally.
 DB_FILENAME = os.path.join("/tmp", "data.db")
 LOG_FILENAME = "bot.log"
 
-# How many products to fetch per category per run (keeps runs short)
-
+# How many products to fetch per category per run
 LIMIT_PER_CATEGORY = 10
 
-
+# NEW: Emoji mappings for categories
+CATEGORY_EMOJIS = {
+    "Health & Personal Care": "💊",
+    "Home & Kitchen Essentials": "🏠",
+    "Fashion": "👗",
+    "Mobile Accessories": "📱",
+    "Beauty": "💄",
+    "Electronics": "⚡",
+    "Large Appliances": "🔌",
+    "Smartwatches": "⌚",
+    "Headphones": "🎧",
+    "Luxury Beauty": "✨",
+    "Pet Supplies": "🐾",
+    "Gaming Accessories": "🎮",
+    "Jewellery": "💎",
+    "Car & Motorbike Accessories": "🚗",
+    "Sports & Fitness": "🏋️",
+    "Smart TVs & Accessories": "📺"
+}
