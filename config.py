@@ -23,7 +23,6 @@ STANDARD_CATEGORIES = {
     "Namkeen & Savory Snacks": "2899881031",
     "Headphones": "1388921031",
     "Luxury Beauty": "5311359031",
-    "Pet Supplies": "2454181031",
     "Chocolates & Confectionery": "2899882031",
     "Car & Motorbike Accessories": "4772060031",
 }
@@ -71,7 +70,7 @@ DB_FILENAME = os.path.join("/tmp", "data.db")
 LOG_FILENAME = "bot.log"
 
 # How many products to fetch per category per run
-LIMIT_PER_CATEGORY = 10
+LIMIT_PER_CATEGORY = 15
 
 # NEW: Emoji mappings for categories
 CATEGORY_EMOJIS = {
@@ -93,3 +92,4 @@ CATEGORY_EMOJIS = {
     "Chocolates & Confectionery": "🍫",
     "Car & Motorbike Accessories": "🚗"
 }
+
