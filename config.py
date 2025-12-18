@@ -23,8 +23,7 @@ STANDARD_CATEGORIES = {
     "Namkeen & Savory Snacks": "2899881031",
     "Headphones": "1388921031",
     "Luxury Beauty": "5311359031",
-    "Chocolates & Confectionery": "2899882031",
-    "Car & Motorbike Accessories": "4772060031",
+    "Chocolates & Confectionery": "2899882031"
 }
 
 # Minimum discount percentage to consider
