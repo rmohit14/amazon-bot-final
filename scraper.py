@@ -5,6 +5,7 @@ import logging
 from typing import List, Dict, Any
 from bs4 import BeautifulSoup
 import requests
+import cloudscraper
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import config
@@ -12,7 +13,16 @@ import config
 BASE_URL = "https://www.amazon.in"
 
 def create_session():
-    session = requests.Session()
+    # CHANGED: Use cloudscraper to mimic real browser TLS signatures
+    # This bypasses the 'bot' detection that standard requests triggers
+    session = cloudscraper.create_scraper(
+        browser={
+            'browser': 'chrome',
+            'platform': 'windows',
+            'desktop': True
+        }
+    )
+    
     # Increased backoff factor to be gentler on Amazon
     retry_strategy = Retry(
         total=config.MAX_REQUEST_RETRIES,
@@ -27,9 +37,9 @@ def create_session():
 SESSION = create_session()
 
 def fetch_page(url: str) -> str | None:
-    # Rotate User-Agent per request
+    # CHANGED: Removed manual User-Agent rotation. 
+    # cloudscraper handles this scientifically to match TLS fingerprints.
     headers = {
-        "User-Agent": random.choice(config.USER_AGENTS),
         "Accept-Language": "en-IN,en;q=0.9",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Referer": "https://www.google.com/"
@@ -44,7 +54,7 @@ def fetch_page(url: str) -> str | None:
             return None
             
         return r.text
-    except requests.RequestException as e:
+    except Exception as e:
         logging.error(f"Fetch failed {url}: {e}")
         return None
 
