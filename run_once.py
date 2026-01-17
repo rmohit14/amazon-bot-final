@@ -56,14 +56,22 @@ def send_telegram_message(text, image_url=None, button_url=None):
 def format_message(item):
     """Create the formatted deal message"""
     discount = 0
-    dp = float(item['deal_price']) if item['deal_price'] else 0
-    op = float(item['original_price']) if item['original_price'] else 0
-    
+    # Ensure prices are floats
+    try:
+        dp = float(item['deal_price']) if item.get('deal_price') else 0.0
+        op = float(item['original_price']) if item.get('original_price') else 0.0
+    except ValueError:
+        logging.warning(f"⚠️ Price conversion error for {item.get('asin')}")
+        return None
+
     if op > dp > 0:
         discount = int(((op - dp) / op) * 100)
+    
+    # LOG DEBUG: Show what math is happening
+    # logging.info(f"Math: {op} - {dp} = {discount}%")
 
     if discount < config.MINIMUM_DISCOUNT:
-        return None
+        return None, discount  # Return discount for logging purposes
 
     emoji = config.CATEGORY_EMOJIS.get(item.get('category', ''), '🔥')
     
@@ -81,26 +89,49 @@ def run_bot():
     
     seen_urls = set()
     
-    # Merge categories to run everything in one go
+    # Merge categories
     all_categories = {**config.HIGH_TRAFFIC_CATEGORIES, **config.STANDARD_CATEGORIES}
     
     urls = scraper.find_deals(all_categories, seen_urls)
     logging.info(f"Found {len(urls)} potential deals. Scraping details...")
     
     deals_posted = 0
+    deals_skipped = 0
     
-    for url in urls:
+    for i, url in enumerate(urls):
+        # CRITICAL FIX: Sleep BEFORE scraping to avoid instant captcha blocks
+        # Only sleep if it's not the first item
+        if i > 0:
+            sleep_time = random.uniform(3, 7)
+            time.sleep(sleep_time)
+
+        logging.info(f"🕵️ Processing {i+1}/{len(urls)}: {url[-15:]}...")
+
         details = scraper.scrape_product_details(url)
-        if not details or not details['asin']: continue
         
+        # 1. Check if scraping failed
+        if not details or not details['asin']: 
+            logging.warning(f"❌ Scrape Failed (Captcha or Selector): {url}")
+            deals_skipped += 1
+            continue
+        
+        # 2. Check Database
         if database.is_deal_already_posted(details['asin']):
-            logging.info(f"Skipping known deal: {details['asin']}")
+            logging.info(f"⏭️ Skipping known deal: {details['asin']}")
+            deals_skipped += 1
             continue
             
-        msg_data = format_message(details)
-        if not msg_data: continue # Discount too low
+        # 3. Check Discount Logic
+        msg_result = format_message(details)
         
-        caption, discount = msg_data
+        # Handle tuple return (msg, discount) or None
+        if not msg_result or msg_result[0] is None:
+            actual_disc = msg_result[1] if msg_result else 0
+            logging.info(f"📉 Low Discount ({actual_disc}% < {config.MINIMUM_DISCOUNT}%): {details['title'][:20]}")
+            deals_skipped += 1
+            continue
+        
+        caption, discount = msg_result
         aff_link = create_affiliate_link(details['asin'])
         
         success = send_telegram_message(caption, details['image_url'], aff_link)
@@ -109,12 +140,15 @@ def run_bot():
             database.record_posted_deal(details['asin'], details['title'], url)
             logging.info(f"✅ Posted: {details['title'][:30]}")
             deals_posted += 1
-            time.sleep(random.uniform(5, 10))
-        
+        else:
+            logging.error(f"⚠️ Telegram Send Failed: {details['asin']}")
+
         # Value Add Content logic
         if deals_posted > 0 and deals_posted % config.VALUE_ADD_CONTENT_FREQUENCY == 0:
             tip = random.choice(config.TIPS_AND_TRICKS)
             send_telegram_message(f"💡 <b>SHOPPING TIP:</b>\n\n{tip}\n\n#SemmaTips")
+
+    logging.info(f"🏁 Run Complete. Posted: {deals_posted}, Skipped/Failed: {deals_skipped}")
 
 if __name__ == "__main__":
     if not os.getenv("TELEGRAM_BOT_TOKEN"):
