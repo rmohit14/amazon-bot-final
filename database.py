@@ -1,59 +1,67 @@
-# database.py (TinyDB + GitHub persistence)
 import os
+import time
 from tinydb import TinyDB, Query
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
+import config  # Import config to get the correct filename
 
-DB_PATH = os.getenv("DB_FILENAME", "data.json")
-db = TinyDB(DB_PATH)
+# Use the path defined in config
+db = TinyDB(config.DB_FILENAME)
 Posted = Query()
 
 def initialize_database():
-    # TinyDB auto-creates data.json if it doesn't exist
-    pass
+    """Ensure DB exists and clean up old records to keep file size small."""
+    if not os.path.exists(config.DB_FILENAME):
+        # Just triggering a write creates the file
+        db.insert({"_init": True})
+        db.remove(Query()._init == True)
+    
+    # Cleanup records older than 7 days to prevent git bloat
+    try:
+        cutoff_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        # Note: TinyDB query for date string comparison might differ based on format
+        # Simple iteration for cleanup is safer for small DBs
+        all_docs = db.all()
+        ids_to_remove = [doc.doc_id for doc in all_docs if doc.get('date') and doc.get('date') < cutoff_date]
+        if ids_to_remove:
+            db.remove(doc_ids=ids_to_remove)
+    except Exception as e:
+        print(f"DB Cleanup warning: {e}")
 
 def is_deal_already_posted(asin: str) -> bool:
-    """
-    Checks if the deal has already been posted TODAY.
-    Returns True if any record for this ASIN has today's date.
-    """
+    """Checks if deal was posted within the last 3 days (prevent repost spam)."""
     if not asin:
         return False
     
-    # Get all records matching this ASIN
     results = db.search(Posted.asin == asin)
-    
     if not results:
         return False
     
-    today_str = str(date.today())
+    # Check if posted recently (e.g., last 3 days)
+    # If you strictly want 'Today only', use: if res.get("date") == str(date.today()):
+    today = datetime.now()
+    three_days_ago = today - timedelta(days=3)
     
-    # ITERATE through all results. If ANY record matches today, return True.
-    # This fixes the bug where result[0] might be an old record.
     for res in results:
-        if res.get("date") == today_str:
-            return True
+        posted_date_str = res.get("date")
+        try:
+            posted_date = datetime.strptime(posted_date_str, "%Y-%m-%d")
+            if posted_date >= three_days_ago:
+                return True
+        except ValueError:
+            continue
             
     return False
 
 def record_posted_deal(asin: str, title: str, url: str):
-    """
-    Records the deal with today's date.
-    Uses upsert to ensure we update the existing record or create a single new one.
-    """
     if not asin:
         return
 
-    today_str = str(date.today())
-    
-    # specific data packet
     deal_data = {
         "asin": asin,
         "title": title,
         "url": url,
-        "date": today_str,
+        "date": str(date.today()),
         "timestamp": datetime.now().isoformat()
     }
     
-    # UPSERT: Update if exists, Insert if not. 
-    # This prevents duplicate entries for the same ASIN in the DB.
     db.upsert(deal_data, Posted.asin == asin)
