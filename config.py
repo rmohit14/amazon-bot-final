@@ -29,66 +29,37 @@ STANDARD_CATEGORIES = {
 # Minimum discount percentage to consider
 MINIMUM_DISCOUNT = 75
 
-# User-Agents to rotate
+# User-Agents
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:115.0) Gecko/20100101 Firefox/115.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
 ]
 
-# NEW: Enhanced Scheduling Configuration
-POSTING_SCHEDULE = {
-    "morning": {"hour": 8, "minute": 0},   # 8:00 AM
-    "afternoon": {"hour": 14, "minute": 0}, # 2:00 PM
-    "evening": {"hour": 20, "minute": 0}    # 8:00 PM
-}
-
-# NEW: Value-add content configuration
-VALUE_ADD_CONTENT_FREQUENCY = 10  # Post educational content every 5 deals
+# Value-add content configuration
+VALUE_ADD_CONTENT_FREQUENCY = 10
 TIPS_AND_TRICKS = [
-    "💡 *Pro Tip:* Always combine bank cashback + coupon codes to stack extra savings!",
-    "🎯 *Shopping Hack:* Use Amazon's 'Subscribe & Save' for up to 15% extra discount on regular purchases!",
-    "⏰ *Sale Alert:* Amazon Great Indian Festival happens twice a year - January & October. Mark your calendar!",
-    "💳 *Money Saver:* Check if your credit card offers additional cashback on Amazon purchases!",
-    "📱 *App Exclusive:* Many deals are app-only. Download Amazon app for extra discounts!",
-    "🔔 *Never Miss a Deal:* Enable notifications for this channel to get instant deal alerts!",
-    "🎁 *Gift Card Trick:* Buy Amazon gift cards during sales and use them later for double savings!",
-    "🚚 *Free Shipping Hack:* Add items to cart worth ₹499+ to get free delivery!",
-    "⭐ *Review Power:* Products with 4+ star ratings are usually better quality deals!",
-    "🔄 *Price Tracker:* Use browser extensions like 'Keepa' to track Amazon price history!"
+    "💡 *Pro Tip:* Combine bank cashback + coupon codes!",
+    "🎯 *Shopping Hack:* Check Subscribe & Save for 15% extra off.",
+    "⏰ *Sale Alert:* Great Indian Festival is in Jan & Oct.",
+    "🎁 *Gift Card Trick:* Buy gift cards during sales for double savings!",
+    "🚚 *Free Shipping:* Add items to cart > ₹499 for free delivery!"
 ]
 
-# Scraper & requests tuning
-REQUEST_TIMEOUT = 12
-MAX_REQUEST_RETRIES = 4
+# Tuning
+REQUEST_TIMEOUT = 15
+MAX_REQUEST_RETRIES = 3
 
-# Database & logging
-DB_FILENAME = os.path.join("/tmp", "data.db")
+# --- CRITICAL FIX: DB must be relative to repo root for GHA persistence ---
+DB_FILENAME = "data.json" 
 LOG_FILENAME = "bot.log"
 
 # How many products to fetch per category per run
 LIMIT_PER_CATEGORY = 15
 
-# NEW: Emoji mappings for categories
+# Emoji mappings
 CATEGORY_EMOJIS = {
-    # High Traffic Categories
-    "Electronics & Gadgets": "⚡",
-    "Fashion & Apparel": "👗",
-    "Beauty": "💄",
-    "Health & Personal Care": "💊",
-    "Jewellery": "💎",
-    "Sports, Fitness & Outdoors": "🏋️",
-
-    # Standard Categories
-    "Biscuits & Cookies": "🍪",
-    "Snacks & Nuts (General)": "🥜",
-    "Namkeen & Savory Snacks": "🍿",
-    "Headphones": "🎧",
-    "Luxury Beauty": "✨",
-    "Pet Supplies": "🐾",
-    "Chocolates & Confectionery": "🍫",
-    "Car & Motorbike Accessories": "🚗"
+    "Electronics": "⚡", "Fashion": "👗", "Beauty": "💄", 
+    "Health": "💊", "Jewellery": "💎", "Sports": "🏋️",
+    "Snacks": "🍪", "Headphones": "🎧"
 }
-
