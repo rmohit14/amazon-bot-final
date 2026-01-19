@@ -4,4 +4,4 @@ lxml
 schedule
 urllib3
 tinydb
-cloudscraper
+fake-useragent
