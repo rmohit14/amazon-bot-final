@@ -1,205 +1,440 @@
-import random
-import time
-import re
+from __future__ import annotations
+
+import json
 import logging
-from typing import List, Dict, Any
-from bs4 import BeautifulSoup
+import random
+import re
+import time
+from typing import Any
+from urllib.parse import urlencode
+
 import requests
+from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from fake_useragent import UserAgent
+
 import config
 
-BASE_URL = "https://www.amazon.in"
+logger = logging.getLogger(__name__)
 
-# Initialize UserAgent rotator
-ua = UserAgent()
 
-def get_random_headers():
-    """Generates realistic browser headers to bypass Amazon bot detection."""
-    random_ua = ua.random
-    return {
-        "User-Agent": random_ua,
-        "Accept-Language": "en-IN,en-GB;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Referer": "https://www.google.com/",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "cross-site",
-        "Sec-Fetch-User": "?1",
-        "Upgrade-Insecure-Requests": "1",
-        "dnt": "1",
-    }
+# -----------------------------
+# HTTP
+# -----------------------------
 
-def create_session():
+_SESSION: requests.Session | None = None
+
+
+def _make_session() -> requests.Session:
     session = requests.Session()
+
     retry_strategy = Retry(
         total=config.MAX_REQUEST_RETRIES,
-        backoff_factor=1,
-        status_forcelist=[429, 500, 502, 504],
-        allowed_methods=["GET"]
+        connect=config.MAX_REQUEST_RETRIES,
+        read=config.MAX_REQUEST_RETRIES,
+        status=config.MAX_REQUEST_RETRIES,
+        backoff_factor=0.8,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset(["GET"]),
+        raise_on_status=False,
+        respect_retry_after_header=True,
     )
-    adapter = HTTPAdapter(max_retries=retry_strategy)
+
+    adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=10, pool_maxsize=10)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
     return session
 
-# Initialize one session object
-SESSION = create_session()
 
-def fetch_page(url: str) -> str | None:
-    """Fetches a page with robust error handling and header rotation."""
-    
-    # Try up to 3 times manually to handle 503s specifically
-    for attempt in range(3):
+def get_session() -> requests.Session:
+    global _SESSION
+    if _SESSION is None:
+        _SESSION = _make_session()
+    return _SESSION
+
+
+def _random_headers() -> dict[str, str]:
+    # Keep headers simple + stable; aggressive header spoofing often increases blocks.
+    return {
+        "User-Agent": random.choice(config.USER_AGENTS),
+        "Accept-Language": "en-IN,en;q=0.9",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Encoding": "gzip, deflate",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Referer": config.BASE_URL,
+    }
+
+
+_CAPTCHA_MARKERS = (
+    "enter the characters you see below",
+    "api-services-support@amazon.com",
+    "/errors/validatecaptcha",
+)
+
+
+def _is_captcha_page(html: str) -> bool:
+    hay = (html or "").lower()
+    return any(m in hay for m in _CAPTCHA_MARKERS)
+
+
+def fetch_html(url: str) -> tuple[str | None, str | None]:
+    """Fetch a URL and return (html, error_reason).
+
+    error_reason is one of: "captcha", "http", "network", or None.
+    """
+    session = get_session()
+
+    # Manual loop so we can:
+    # 1) jitter sleep politely
+    # 2) detect CAPTCHA pages and stop early
+    for attempt in range(1, config.MAX_REQUEST_RETRIES + 1):
+        time.sleep(random.uniform(config.MIN_SLEEP_SECONDS, config.MAX_SLEEP_SECONDS))
+
         try:
-            # Rotate headers for EVERY request
-            headers = get_random_headers()
-            
-            # Random sleep to mimic human behavior
-            time.sleep(random.uniform(1, 3))
-            
-            response = SESSION.get(url, headers=headers, timeout=config.REQUEST_TIMEOUT)
-            
-            # Handle 503 (Service Unavailable) explicitly
-            if response.status_code == 503:
-                logging.warning(f"⚠️ 503 Detected. Sleeping... (Attempt {attempt+1}/3)")
-                time.sleep(random.uniform(5, 10))
-                continue # Try again with new headers
-                
-            response.raise_for_status()
-            
-            # Check for Captcha
-            if "enter the characters you see below" in response.text.lower() or "api-services-support@amazon.com" in response.text:
-                logging.warning(f"🤖 Captcha/Bot Block detected for {url}")
-                return None
-            
-            return response.text
-            
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Fetch failed {url}: {e}")
-            return None
-            
-    return None
-
-def find_deals(categories: dict, seen_urls: set) -> List[str]:
-    results = []
-    for cat_name, node_id in categories.items():
-        # Clean search URL
-        search_url = f"{BASE_URL}/s?rh=n%3A{node_id}&pct-off={config.MINIMUM_DISCOUNT}-100"
-        logging.info(f"🔎 Scanning: {cat_name}")
-        
-        html = fetch_page(search_url)
-        if not html:
-            logging.warning(f"❌ Could not load category: {cat_name}")
+            resp = session.get(
+                url,
+                headers=_random_headers(),
+                timeout=(5, config.REQUEST_TIMEOUT_SECONDS),
+                allow_redirects=True,
+            )
+        except requests.RequestException as e:
+            # IMPORTANT FIX: don't return immediately (your old code did). Keep retrying.
+            wait = min(30.0, (2 ** (attempt - 1)) + random.uniform(0.2, 1.2))
+            logger.warning(
+                "Network error (attempt %s/%s) for %s: %s | sleeping %.1fs",
+                attempt,
+                config.MAX_REQUEST_RETRIES,
+                url,
+                e,
+                wait,
+            )
+            time.sleep(wait)
             continue
 
-        soup = BeautifulSoup(html, "lxml")
-        
-        # Selectors for search results
-        anchors = soup.select('div[data-component-type="s-search-result"] h2 a')
-        
-        if not anchors:
-            # Fallback for different layouts
-            anchors = soup.select('a.a-link-normal.s-no-outline')
+        html = resp.text or ""
 
-        count = 0
-        for a in anchors:
-            href = a.get("href")
-            if not href or "/sspa/" in href or "/gp/video/" in href: # Skip ads and video
-                continue
-            
-            url = f"{BASE_URL}{href}" if href.startswith("/") else href
-            url = url.split("?")[0] # Clean URL
-            
-            if url in seen_urls: continue
-            
-            seen_urls.add(url)
-            results.append(url)
-            count += 1
-            if count >= config.LIMIT_PER_CATEGORY: break
-            
-        time.sleep(random.uniform(2, 4))
+        if _is_captcha_page(html):
+            logger.warning("Captcha/bot wall detected (status=%s) for %s", resp.status_code, url)
+            return None, "captcha"
+
+        if resp.status_code >= 400:
+            # Adapter retries already happened; we still add a small backoff here.
+            wait = min(45.0, (2 ** (attempt - 1)) + random.uniform(0.5, 2.0))
+            logger.warning(
+                "HTTP %s (attempt %s/%s) for %s | sleeping %.1fs",
+                resp.status_code,
+                attempt,
+                config.MAX_REQUEST_RETRIES,
+                url,
+                wait,
+            )
+            time.sleep(wait)
+            continue
+
+        return html, None
+
+    return None, "network"
+
+
+# -----------------------------
+# Parsing helpers
+# -----------------------------
+
+_PRICE_RE = re.compile(r"(\d[\d,]*\.?\d*)")
+
+
+def parse_inr_price(text: str | None) -> float | None:
+    if not text:
+        return None
+
+    # Handle ranges like "₹999 - ₹1,499" by taking the first number.
+    m = _PRICE_RE.search(text)
+    if not m:
+        return None
+
+    raw = m.group(1).replace(",", "")
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def compute_discount(original_price: float | None, deal_price: float | None) -> int | None:
+    if not original_price or not deal_price:
+        return None
+    if original_price <= 0 or deal_price <= 0:
+        return None
+    if deal_price >= original_price:
+        return None
+    return int(round(((original_price - deal_price) / original_price) * 100))
+
+
+def extract_asin_from_url(url: str) -> str | None:
+    m = re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", url)
+    return m.group(1) if m else None
+
+
+def canonical_product_url(asin: str) -> str:
+    return f"{config.BASE_URL}/dp/{asin}"
+
+
+def build_category_search_url(node_id: str, page: int) -> str:
+    params = {
+        "rh": f"n:{node_id}",
+        "s": config.AMAZON_SORT,
+        "page": str(page),
+    }
+    return f"{config.BASE_URL}/s?{urlencode(params)}"
+
+
+def _is_sponsored(result_div: Any) -> bool:
+    # Amazon keeps changing sponsored markup; combine a couple heuristics.
+    if result_div.select_one("span.s-sponsored-label-text, span.puis-sponsored-label-text"):
+        return True
+    if result_div.select_one("a[href*='sspa'], a[href*='/sspa/']"):
+        return True
+    if result_div.find(string=re.compile(r"\bSponsored\b", re.IGNORECASE)):
+        return True
+    return False
+
+
+def _extract_search_title(result_div: Any) -> str | None:
+    link = result_div.select_one("h2 a.a-link-normal") or result_div.select_one("a.a-link-normal.s-no-outline")
+    if not link:
+        return None
+    title = link.get_text(" ", strip=True)
+    return title or None
+
+
+def _extract_search_image(result_div: Any) -> str | None:
+    img = result_div.select_one("img.s-image")
+    if not img:
+        return None
+    return (img.get("src") or img.get("data-src") or "").strip() or None
+
+
+def _extract_search_prices(result_div: Any) -> tuple[float | None, float | None]:
+    """Return (deal_price, original_price) from a search-result card."""
+    deal_price: float | None = None
+    original_price: float | None = None
+
+    for offscreen in result_div.select("span.a-price span.a-offscreen"):
+        parent_price = offscreen.find_parent("span", class_="a-price")
+        parent_classes = parent_price.get("class", []) if parent_price else []
+        txt = offscreen.get_text(strip=True)
+        if not txt:
+            continue
+        if "a-text-price" in parent_classes:
+            continue
+        if "₹" not in txt and "Rs" not in txt:
+            continue
+        deal_price = parse_inr_price(txt)
+        if deal_price is not None:
+            break
+
+    for offscreen in result_div.select("span.a-price.a-text-price span.a-offscreen, span.a-text-price span.a-offscreen"):
+        txt = offscreen.get_text(strip=True)
+        if not txt:
+            continue
+        if "₹" not in txt and "Rs" not in txt:
+            continue
+        original_price = parse_inr_price(txt)
+        if original_price is not None:
+            break
+
+    return deal_price, original_price
+
+
+def parse_search_page(html: str, category: str) -> list[dict[str, Any]]:
+    """Parse Amazon search results page into lightweight deal dicts."""
+    soup = BeautifulSoup(html, "lxml")
+    results: list[dict[str, Any]] = []
+
+    for div in soup.select("div[data-component-type='s-search-result']"):
+        asin = (div.get("data-asin") or "").strip()
+        if not asin or len(asin) != 10:
+            continue
+        if _is_sponsored(div):
+            continue
+
+        title = _extract_search_title(div)
+        if not title:
+            continue
+
+        image_url = _extract_search_image(div)
+        deal_price, original_price = _extract_search_prices(div)
+        discount = compute_discount(original_price, deal_price)
+
+        is_limited_time = bool(div.find(string=re.compile(r"limited time deal", re.IGNORECASE)))
+
+        results.append(
+            {
+                "asin": asin,
+                "title": title,
+                "product_url": canonical_product_url(asin),
+                "image_url": image_url,
+                "deal_price": deal_price,
+                "original_price": original_price,
+                "discount": discount,
+                "category": category,
+                "limited_time": is_limited_time,
+            }
+        )
+
     return results
 
-def scrape_product_details(product_url: str) -> Dict[str, Any] | None:
-    html = fetch_page(product_url)
-    if not html: return None
-    
-    soup = BeautifulSoup(html, "lxml")
-    
-    # 1. Get Title
-    title_el = soup.select_one("#productTitle")
-    if not title_el: 
-        # Debugging: Save HTML if title missing to verify layout
+
+# -----------------------------
+# Product-page fallback (only for missing data)
+# -----------------------------
+
+def scrape_product_page(product_url: str) -> dict[str, Any] | None:
+    html, err = fetch_html(product_url)
+    if not html:
         return None
-        
-    title = title_el.get_text(strip=True)
-    
-    # 2. Get Deal Price
+
+    soup = BeautifulSoup(html, "lxml")
+    asin = extract_asin_from_url(product_url)
+
+    title_el = soup.select_one("#productTitle") or soup.select_one("h1#title")
+    title = title_el.get_text(" ", strip=True) if title_el else None
+    if not title:
+        meta_title = soup.select_one("meta[name='title']")
+        if meta_title and meta_title.get("content"):
+            title = meta_title.get("content").strip()
+
     deal_price = None
     price_selectors = [
-        ".apexPriceToPay .a-offscreen",
-        "#corePriceDisplay_desktop_feature_div .a-price-whole", 
-        ".a-price.a-text-price.a-size-medium .a-offscreen",
+        "#corePriceDisplay_desktop_feature_div span.a-price span.a-offscreen",
+        "#corePrice_feature_div span.a-price span.a-offscreen",
+        ".apexPriceToPay span.a-offscreen",
         "#priceblock_dealprice",
-        ".a-price[data-a-size='xl'] .a-offscreen"
+        "#priceblock_ourprice",
+        "#priceblock_saleprice",
     ]
-    
     for sel in price_selectors:
         el = soup.select_one(sel)
         if el:
-            txt = el.get_text(strip=True)
-            clean_price = re.sub(r"[^\d.]", "", txt)
-            if clean_price:
-                deal_price = clean_price
+            deal_price = parse_inr_price(el.get_text(strip=True))
+            if deal_price is not None:
                 break
-    
-    # 3. Get MRP
-    mrp = None
+
+    original_price = None
     mrp_selectors = [
+        "#corePriceDisplay_desktop_feature_div span.a-price.a-text-price span.a-offscreen",
+        "#corePriceDisplay_desktop_feature_div span[data-a-strike='true'] span.a-offscreen",
         "span[data-a-strike='true'] span.a-offscreen",
-        "#corePriceDisplay_desktop_feature_div .a-text-price span.a-offscreen",
-        ".a-text-price span.a-offscreen"
+        "span.a-text-price span.a-offscreen",
     ]
     for sel in mrp_selectors:
         el = soup.select_one(sel)
         if el:
-            txt = el.get_text(strip=True)
-            mrp = re.sub(r"[^\d.]", "", txt)
-            break
+            original_price = parse_inr_price(el.get_text(strip=True))
+            if original_price is not None:
+                break
 
-    # 4. Get ASIN
-    asin = None
-    m = re.search(r"/dp/([A-Z0-9]{10})", product_url)
-    if m: asin = m.group(1)
-    
-    # 5. Get Image
-    img_url = None
+    image_url = None
     img_el = soup.select_one("#landingImage") or soup.select_one("#imgBlkFront")
     if img_el:
-        # Try dynamic JS data first
-        if img_el.has_attr("data-old-hires") and img_el["data-old-hires"]:
-            img_url = img_el["data-old-hires"]
-        elif img_el.has_attr("data-a-dynamic-image"):
-            # Extract first image from JSON object in attribute
-            try:
-                data = img_el["data-a-dynamic-image"]
-                # Rough extract of first URL
-                urls = re.findall(r'https?://[^"]+', data)
-                if urls: img_url = urls[0]
-            except:
-                pass
-        
-        if not img_url:
-            img_url = img_el.get("src")
+        image_url = (img_el.get("data-old-hires") or "").strip() or None
+        if not image_url:
+            dyn = img_el.get("data-a-dynamic-image")
+            if dyn:
+                try:
+                    data = json.loads(dyn)
+                    if isinstance(data, dict) and data:
+                        image_url = next(iter(data.keys()))
+                except Exception:
+                    pass
+        if not image_url:
+            image_url = (img_el.get("src") or "").strip() or None
+
+    discount = compute_discount(original_price, deal_price)
+
+    if not asin or not title:
+        return None
 
     return {
-        "title": title,
-        "deal_price": deal_price,
-        "original_price": mrp,
-        "image_url": img_url,
         "asin": asin,
-        "product_url": product_url
+        "title": title,
+        "product_url": canonical_product_url(asin),
+        "image_url": image_url,
+        "deal_price": deal_price,
+        "original_price": original_price,
+        "discount": discount,
     }
+
+
+def enrich_missing_fields(deals: list[dict[str, Any]], max_lookups: int = 10) -> None:
+    """Fill missing prices/title/image by hitting product pages for a few items."""
+    lookups = 0
+    for deal in deals:
+        if lookups >= max_lookups:
+            return
+
+        if deal.get("discount") is not None and deal.get("deal_price") and deal.get("original_price"):
+            continue
+
+        details = scrape_product_page(deal["product_url"])
+        if not details:
+            continue
+
+        for k in ("title", "image_url", "deal_price", "original_price", "discount"):
+            if deal.get(k) in (None, "") and details.get(k) not in (None, ""):
+                deal[k] = details[k]
+
+        lookups += 1
+
+
+# -----------------------------
+# Public API used by run_once.py
+# -----------------------------
+
+def discover_deals() -> tuple[list[dict[str, Any]], bool]:
+    """Discover deal candidates across configured categories.
+
+    Returns (deals, captcha_hit).
+    """
+    seen_asins: set[str] = set()
+    all_deals: list[dict[str, Any]] = []
+
+    def _scan_category(cat_name: str, node_id: str, pages: int) -> None:
+        kept_for_cat = 0
+        for page in range(1, pages + 1):
+            url = build_category_search_url(node_id=node_id, page=page)
+            html, err = fetch_html(url)
+            if not html:
+                if err == "captcha" and config.STOP_ON_CAPTCHA:
+                    raise RuntimeError("CAPTCHA")
+                continue
+
+            items = parse_search_page(html, category=cat_name)
+            if not items:
+                continue
+
+            for item in items:
+                asin = item["asin"]
+                if asin in seen_asins:
+                    continue
+                seen_asins.add(asin)
+                all_deals.append(item)
+                kept_for_cat += 1
+                if kept_for_cat >= config.MAX_CANDIDATES_PER_CATEGORY:
+                    return
+
+    try:
+        for cat, node in config.HIGH_TRAFFIC_CATEGORIES.items():
+            logger.info("Scanning category=%s pages=%s", cat, config.PAGES_PER_HIGH_TRAFFIC_CATEGORY)
+            _scan_category(cat, node, config.PAGES_PER_HIGH_TRAFFIC_CATEGORY)
+
+        for cat, node in config.STANDARD_CATEGORIES.items():
+            logger.info("Scanning category=%s pages=%s", cat, config.PAGES_PER_STANDARD_CATEGORY)
+            _scan_category(cat, node, config.PAGES_PER_STANDARD_CATEGORY)
+    except RuntimeError as e:
+        if str(e) == "CAPTCHA":
+            return all_deals, True
+        raise
+
+    enrich_missing_fields(all_deals, max_lookups=10)
+    return all_deals, False
