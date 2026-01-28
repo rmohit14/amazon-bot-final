@@ -1,7 +1,5 @@
 requests
 beautifulsoup4
 lxml
-schedule
 urllib3
 tinydb
-fake-useragent
