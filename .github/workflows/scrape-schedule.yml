@@ -1,28 +1,37 @@
-name: Amazon Offer Bot (Free GitHub Actions)
+name: Amazon Offer Bot (India)
 
 on:
   schedule:
     - cron: "0 */2 * * *"  # every 2 hours (UTC)
-  workflow_dispatch: {}  # manual run option
+  workflow_dispatch: {}
 
-permissions:
-  contents: write  # allows committing the data.json file
+concurrency:
+  group: amazon-offer-bot
+  cancel-in-progress: true
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          persist-credentials: true
-          fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
+
+      - name: Restore posted-deals DB cache
+        id: db-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data.json
+          key: amazon-offer-bot-db-${{ github.run_id }}
+          restore-keys: |
+            amazon-offer-bot-db-
 
       - name: Install dependencies
         run: |
@@ -32,12 +41,15 @@ jobs:
       - name: Run bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          PYTHONUNBUFFERED: "1"
+          # Optional overrides:
+          # TELEGRAM_CHANNEL_ID: "@SEMMAOFFERS"
+          # MINIMUM_DISCOUNT: "60"
         run: python run_once.py
 
-      - name: Commit updated data.json
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data.json
-          git diff --quiet && git diff --staged --quiet || git commit -m "Update data.json [skip ci]"
-          git push
+      - name: Save posted-deals DB cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data.json
+          key: amazon-offer-bot-db-${{ github.run_id }}
