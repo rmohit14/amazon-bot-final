@@ -2,7 +2,7 @@ name: Amazon Offer Bot (Free GitHub Actions)
 
 on:
   schedule:
-    - cron: "0 */2 * * *"  # every 2 hours (UTC)
+    - cron: "*/30 * * * *"  # every 30 min (UTC)
   workflow_dispatch: {}  # manual run option
 
 permissions:
