@@ -1,4 +1,3 @@
-# scraper.py
 import random
 import time
 import re
@@ -8,7 +7,6 @@ from bs4 import BeautifulSoup
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-
 from config import (
     USER_AGENTS,
     REQUEST_TIMEOUT,
@@ -67,12 +65,6 @@ def _price_to_number(price: str | None) -> float | None:
     except (ValueError, TypeError):
         return None
 
-def _first_regex_price(html: str) -> str | None:
-    matches = re.findall(r"₹\s*[0-9]{1,3}(?:[0-9,]*)(?:\.\d+)?", html)
-    if matches:
-        return _clean_text(matches[0])
-    return None
-
 def find_deals(categories: dict, seen_urls: set, limit_per_category: int = LIMIT_PER_CATEGORY) -> List[str]:
     results = []
     
@@ -126,15 +118,6 @@ def scrape_product_details(product_url: str) -> Dict[str, Any] | None:
 
     soup = BeautifulSoup(html, "lxml")
     try:
-        # --- Book format skip ---
-        format_element = soup.select_one("#tmmSwatches .a-button-selected .a-button-text")
-        if format_element:
-            format_text = _text(format_element)
-            if format_text and "paperback" not in format_text.lower():
-                logging.info(f"Skipping non-paperback book format: '{format_text}' - {product_url}")
-                return None
-
-        # --- Title ---
         title = None
         for sel in ["#productTitle", "span#productTitle", "h1 span#title"]:
             el = soup.select_one(sel)
@@ -146,10 +129,7 @@ def scrape_product_details(product_url: str) -> Dict[str, Any] | None:
             if og_title and og_title.has_attr("content"):
                 title = _clean_text(og_title["content"])
 
-        # --- Deal price ---
         deal_price = None
-        # **FIXED**: Removed the selector that was incorrectly matching the MRP.
-        # The list is now more specific to the actual selling price.
         for sel in [
             "#corePrice_feature_div span.a-offscreen",
             "#priceblock_dealprice",
@@ -165,11 +145,10 @@ def scrape_product_details(product_url: str) -> Dict[str, Any] | None:
                     deal_price = cand
                     break
         
-        # --- Original price (MRP) ---
         original_price = None
         for sel in [
-            "span[data-a-strike='true'] span.a-offscreen", # Most reliable selector for MRP
-            ".a-price.a-text-price .a-offscreen", # This selector correctly finds MRP here
+            "span[data-a-strike='true'] span.a-offscreen",
+            ".a-price.a-text-price .a-offscreen",
             "#corePrice_feature_div span.a-text-price span.a-offscreen",
             "#price span.a-text-price span.a-offscreen",
             ".priceBlockStrikePriceString"
@@ -177,19 +156,11 @@ def scrape_product_details(product_url: str) -> Dict[str, Any] | None:
             el = soup.select_one(sel)
             if el and _text(el):
                 cand = _clean_text(_text(el))
-                # Reject unit prices (contain '/' or 'per') and ensure it's not the same as deal price
                 if not re.search(r"/|per", cand.lower()):
                     if cand and cand != deal_price:
                         original_price = cand
                         break
 
-        # --- Fallback checks ---
-        if not deal_price:
-            cand = _first_regex_price(html)
-            if cand:
-                deal_price = cand
-
-        # If original < deal, discard it (likely a unit price error)
         if deal_price and original_price:
             dpn = _price_to_number(deal_price)
             opn = _price_to_number(original_price)
@@ -197,29 +168,24 @@ def scrape_product_details(product_url: str) -> Dict[str, Any] | None:
                 logging.info(f"Discarding invalid original_price '{original_price}' which is less than deal_price '{deal_price}' for {product_url}")
                 original_price = None
 
-        # --- Image ---
         image_url = None
         for sel in ["#landingImage", "#imgTagWrapperId img", "#main-image-container img"]:
             el = soup.select_one(sel)
             if el:
-                # Prioritize high-res images
                 src = el.get("data-old-hires") or el.get("src") or el.get("data-a-dynamic-image")
                 if src and not src.startswith("data:image"):
-                    # data-a-dynamic-image can be a JSON string, extract first URL
-                    if src.startswith("{"): 
+                    if src.startswith("{"):
                         match = re.search(r'https://[^\s"]+', src)
                         if match:
-                           image_url = match.group(0)
+                            image_url = match.group(0)
                     else:
                         image_url = src
                     break
-        # Fallback to OG image meta tag
         if not image_url:
             og = soup.select_one("meta[property='og:image']")
             if og and og.has_attr("content"):
                 image_url = og["content"]
 
-        # --- ASIN ---
         asin = None
         asin_input = soup.select_one("input#ASIN")
         if asin_input and asin_input.has_attr("value"):
