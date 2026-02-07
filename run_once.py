@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+import logging
+import sys
+import os
+import random
+import time
+from datetime import datetime
+
+import config
+import scraper
+import database
+
+# Setup Logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler(config.LOG_FILENAME)]
+)
+
+def create_affiliate_link(asin):
+    return f"https://www.amazon.in/dp/{asin}/?tag={config.AMAZON_ASSOCIATE_ID}"
+
+def send_telegram_message(text, image_url=None, button_url=None):
+    import requests
+    import json
+    
+    base_url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}"
+    payload = {
+        "chat_id": config.TELEGRAM_CHANNEL_ID,
+        "parse_mode": "HTML"
+    }
+    
+    if button_url:
+        payload["reply_markup"] = json.dumps({
+            "inline_keyboard": [[{"text": "🛒 Buy Now on Amazon", "url": button_url}]]
+        })
+
+    try:
+        if image_url:
+            payload["photo"] = image_url
+            payload["caption"] = text
+            resp = requests.post(f"{base_url}/sendPhoto", data=payload, timeout=20)
+        else:
+            payload["text"] = text
+            resp = requests.post(f"{base_url}/sendMessage", data=payload, timeout=20)
+            
+        if resp.status_code != 200:
+            logging.error(f"Telegram Error: {resp.text}")
+            return False
+        return True
+    except Exception as e:
+        logging.error(f"Telegram Connection Error: {e}")
+        return False
+
+def format_message(item):
+    if not item.get('deal_price') or not item.get('original_price'):
+        return None, 0
+
+    try:
+        dp = float(item['deal_price'])
+        op = float(item['original_price'])
+    except ValueError:
+        return None, 0
+
+    if op <= dp: return None, 0
+        
+    discount = int(((op - dp) / op) * 100)
+    
+    if discount < config.MINIMUM_DISCOUNT:
+        return None, discount
+
+    emoji = config.CATEGORY_EMOJIS.get(item.get('category', ''), '🔥')
+    
+    msg = f"{emoji} <b>{item['title'][:80]}...</b>\n\n"
+    msg += f"📉 <b>{discount}% OFF</b>\n"
+    msg += f"❌ <s>₹{int(op)}</s>\n"
+    msg += f"✅ <b>Deal Price: ₹{int(dp)}</b>\n\n"
+    msg += "⏳ Limited Time Deal!\n"
+    
+    return msg, discount
+
+def run_bot():
+    logging.info("🚀 Starting Deal Hunt...")
+    database.initialize_database()
+    
+    seen_urls = set()
+    all_categories = {**config.HIGH_TRAFFIC_CATEGORIES, **config.STANDARD_CATEGORIES}
+    
+    # 1. Fetch Deals
+    urls = scraper.find_deals(all_categories, seen_urls)
+    logging.info(f"Found {len(urls)} potential deals. Scraping details...")
+    
+    deals_posted = 0
+    
+    # 2. Scrape Each Deal
+    for i, url in enumerate(urls):
+        # Increased sleep to prevent 503 blocks
+        if i > 0: time.sleep(random.uniform(5, 12))
+
+        logging.info(f"🕵️ Processing {i+1}/{len(urls)}: {url[-15:]}...")
+        
+        details = scraper.scrape_product_details(url)
+        
+        if not details or not details['asin']: 
+            logging.warning(f"❌ Scrape Failed: {url}")
+            continue
+        
+        if database.is_deal_already_posted(details['asin']):
+            logging.info(f"⏭️ Skipping known deal: {details['asin']}")
+            continue
+            
+        msg_result = format_message(details)
+        if not msg_result or msg_result[0] is None:
+            continue
+        
+        caption, discount = msg_result
+        aff_link = create_affiliate_link(details['asin'])
+        
+        success = send_telegram_message(caption, details['image_url'], aff_link)
+        
+        if success:
+            database.record_posted_deal(details['asin'], details['title'], url)
+            logging.info(f"✅ Posted: {details['title'][:30]}")
+            deals_posted += 1
+            
+            # Value Add Content
+            if deals_posted % config.VALUE_ADD_CONTENT_FREQUENCY == 0:
+                tip = random.choice(config.TIPS_AND_TRICKS)
+                send_telegram_message(f"💡 <b>SHOPPING TIP:</b>\n\n{tip}\n\n#SemmaTips")
+
+    logging.info(f"🏁 Run Complete. Posted: {deals_posted}")
+
+if __name__ == "__main__":
+    if not os.getenv("TELEGRAM_BOT_TOKEN"):
+        logging.error("Missing TELEGRAM_BOT_TOKEN")
+        sys.exit(1)
+    run_bot()
