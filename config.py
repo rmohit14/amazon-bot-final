@@ -38,25 +38,14 @@ USER_AGENTS = [
     "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:115.0) Gecko/20100101 Firefox/115.0",
 ]
 
-# Scraper & requests tuning
-REQUEST_TIMEOUT = 12
-MAX_REQUEST_RETRIES = 4
-
-# Database & logging
-DB_FILENAME = os.path.join("/tmp", "data.db")
-LOG_FILENAME = "bot.log"
-
-# How many products to fetch per category per run
-LIMIT_PER_CATEGORY = 15
-
-# --- Scheduling Configuration ---
+# NEW: Enhanced Scheduling Configuration
 POSTING_SCHEDULE = {
     "morning": {"hour": 8, "minute": 0},   # 8:00 AM
     "afternoon": {"hour": 14, "minute": 0}, # 2:00 PM
     "evening": {"hour": 20, "minute": 0}    # 8:00 PM
 }
 
-# --- Value-add content configuration ---
+# NEW: Value-add content configuration
 VALUE_ADD_CONTENT_FREQUENCY = 10  # Post educational content every 5 deals
 TIPS_AND_TRICKS = [
     "💡 *Pro Tip:* Always combine bank cashback + coupon codes to stack extra savings!",
@@ -71,7 +60,18 @@ TIPS_AND_TRICKS = [
     "🔄 *Price Tracker:* Use browser extensions like 'Keepa' to track Amazon price history!"
 ]
 
-# --- Emoji mappings for categories ---
+# Scraper & requests tuning
+REQUEST_TIMEOUT = 12
+MAX_REQUEST_RETRIES = 4
+
+# Database & logging
+DB_FILENAME = os.path.join("/tmp", "data.db")
+LOG_FILENAME = "bot.log"
+
+# How many products to fetch per category per run
+LIMIT_PER_CATEGORY = 15
+
+# NEW: Emoji mappings for categories
 CATEGORY_EMOJIS = {
     # High Traffic Categories
     "Electronics & Gadgets": "⚡",
