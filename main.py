@@ -1,34 +1,17 @@
-import logging
-from datetime import datetime
-from config import TELEGRAM_BOT_TOKEN
-from telegram import Bot
-from scraper import find_deals, scrape_product_details
-import database
+# main.py
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler()]
-)
+def calculate_discount(deal_price_str, original_price_str):
+    deal_price_num = _clean_price(deal_price_str)
+    original_price_num = _clean_price(original_price_str)
+    discount_percent = 0
 
-def send_to_telegram(chat_id, text):
-    bot = Bot(token=TELEGRAM_BOT_TOKEN)
-    bot.send_message(chat_id=chat_id, text=text)
+    if deal_price_num and original_price_num and original_price_num > deal_price_num:
+        discount_percent = round(((original_price_num - deal_price_num) / original_price_num) * 100)
 
-def run_all_cycles():
-    categories = {
-        'Electronics': '12345',  # Sample category node
-        'Fashion': '67890'
-    }
-    seen_urls = set()
-    deal_urls = find_deals(categories, seen_urls)
-    
-    for url in deal_urls:
-        details = scrape_product_details(url)
-        if details:
-            send_to_telegram(
-                '@my_telegram_channel', 
-                f"Deal: {details['title']} - {details['deal_price']}! MRP: {details['original_price']}")
-        else:
-            logging.warning(f"Failed to scrape details for {url}")
+    # Fallback: use extracted discount percent if available
+    if discount_percent == 0:
+        dp_from_page = details.get("discount_percent")
+        if isinstance(dp_from_page, int) and 0 <= dp_from_page <= 100:
+            discount_percent = dp_from_page
+
+    return discount_percent
