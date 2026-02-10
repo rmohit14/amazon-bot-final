@@ -77,8 +77,11 @@ def find_deals(categories: dict, seen_urls: set, limit_per_category: int = LIMIT
     results = []
     
     for cat_name, node_id in categories.items():
-        search_url = f"{BASE_URL}/s?rh=n%3A{node_id}&pct-off={MINIMUM_DISCOUNT}-100"
-        logging.info(f"Searching for deals in category: {cat_name}")
+        # UPDATED: Use open-ended discount range (e.g., "70-") to ensure we get all 70%+ deals.
+        # This matches the user's request to scrape the page that "already has the 70% and above offers".
+        search_url = f"{BASE_URL}/s?rh=n%3A{node_id}&pct-off={MINIMUM_DISCOUNT}-"
+        
+        logging.info(f"Searching for deals in category: {cat_name} with {MINIMUM_DISCOUNT}%+ filter")
         html = fetch_page(search_url)
         
         if not html:
@@ -148,8 +151,6 @@ def scrape_product_details(product_url: str) -> Dict[str, Any] | None:
 
         # --- Deal price ---
         deal_price = None
-        # **FIXED**: Removed the selector that was incorrectly matching the MRP.
-        # The list is now more specific to the actual selling price.
         for sel in [
             "#corePrice_feature_div span.a-offscreen",
             "#priceblock_dealprice",
@@ -168,11 +169,12 @@ def scrape_product_details(product_url: str) -> Dict[str, Any] | None:
         # --- Original price (MRP) ---
         original_price = None
         for sel in [
-            "span[data-a-strike='true'] span.a-offscreen", # Most reliable selector for MRP
-            ".a-price.a-text-price .a-offscreen", # This selector correctly finds MRP here
+            "span[data-a-strike='true'] span.a-offscreen", 
+            ".a-price.a-text-price .a-offscreen",
             "#corePrice_feature_div span.a-text-price span.a-offscreen",
             "#price span.a-text-price span.a-offscreen",
-            ".priceBlockStrikePriceString"
+            ".priceBlockStrikePriceString",
+            "span.a-text-strike" # Added: Common selector for MRP to prevent skipping
         ]:
             el = soup.select_one(sel)
             if el and _text(el):
