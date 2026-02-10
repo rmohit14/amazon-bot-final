@@ -27,7 +27,8 @@ STANDARD_CATEGORIES = {
 }
 
 # Minimum discount percentage to consider
-MINIMUM_DISCOUNT = 75
+# UPDATED: Changed to 70 as per request to capture more deals
+MINIMUM_DISCOUNT = 70
 
 # User-Agents to rotate
 USER_AGENTS = [
@@ -91,4 +92,3 @@ CATEGORY_EMOJIS = {
     "Chocolates & Confectionery": "🍫",
     "Car & Motorbike Accessories": "🚗"
 }
-
